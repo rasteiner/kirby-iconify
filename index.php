@@ -7,9 +7,12 @@ load([
     'rasteiner\\iconify\\Icon' => 'Icon.php'
 ], __DIR__ . '/lib');
 
+require_once __DIR__ . '/helpers.php';
+
 Kirby::plugin('rasteiner/kirby-iconify', [
     'options' => [
-        'cache' => true
+        'cache' => true,
+        'defaultAttrs' => [],
     ],
     'fieldMethods' => [
         'toIcon' => function ($field) {

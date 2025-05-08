@@ -8,6 +8,7 @@ use Kirby\Toolkit\Html;
 
 class Icon {
     private static array $using = [];
+    private static array|null $defaultAttrs = null;
 
     // lookup cache
     private function __construct(public string $library, public string $icon) {
@@ -33,8 +34,12 @@ class Icon {
         self::$using[$this->library][$this->icon] = true;
         $library = $this->library;
 
+        if(self::$defaultAttrs === null) {
+            self::$defaultAttrs = option('rasteiner.kirby-iconify.defaultAttrs', []);
+        }
+
         // is this in cache? 
-        $cache = kirby()->cache('rasteiner.iconify');
+        $cache = kirby()->cache('rasteiner.kirby-iconify');
         $cached = $cache->getOrSet($library, fn() => self::downloadPrefix($library));
 
         // check if icon exists in cache
@@ -62,12 +67,14 @@ class Icon {
                 ]),
             ], [
                 'viewBox' => "{$l} {$t} {$w} {$h}",
-            ] + $attrs);
+            ] + $attrs + self::$defaultAttrs);
         } else {
             if (option('debug')) {
                 echo 'Icon ' . html($icon) . ' not found in library ' . html($library);
             }
-        }        
+        }
+        
+        return '';
     }
 
     protected static function downloadPrefix(string $prefix): array {
@@ -95,7 +102,7 @@ class Icon {
         }
 
         sort($icons);
-        $cache = kirby()->cache('rasteiner.iconify');
+        $cache = kirby()->cache('rasteiner.kirby-iconify');
         $cached = $cache->get($prefix) ?? [];
         $query = http_build_query([
             'icons' => join(',', $icons)
@@ -146,7 +153,7 @@ class Icon {
             return '';
         }
 
-        $cache = kirby()->cache('rasteiner.iconify');
+        $cache = kirby()->cache('rasteiner.kirby-iconify');
         
         $icons = [];
         
