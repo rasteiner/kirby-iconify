@@ -9,11 +9,31 @@ use Kirby\Toolkit\Html;
 class Icon {
     private static array $using = [];
     private static array|null $defaultAttrs = null;
+    
+
+    public static float $libraryTime = 0;
 
     // lookup cache
     private function __construct(public string $library, public string $icon) {
         $this->library = $library;
         $this->icon = $icon;
+    }
+
+    private static function getLibrary(string $library): array {
+        $start = microtime(true);
+        static $memcache = [];
+        if (array_key_exists($library, $memcache)) {
+            self::$libraryTime += microtime(true) - $start;
+            return $memcache[$library];
+        }
+
+        // is this in cache? 
+        $cache = kirby()->cache('rasteiner.kirby-iconify');
+        $cached = $cache->getOrSet($library, fn() => self::downloadPrefix($library));
+        $memcache[$library] = $cached;
+
+        self::$libraryTime += microtime(true) - $start;
+        return $cached;
     }
 
     public static function new(string $id): ?self {
@@ -38,9 +58,7 @@ class Icon {
             self::$defaultAttrs = option('rasteiner.kirby-iconify.defaultAttrs', []);
         }
 
-        // is this in cache? 
-        $cache = kirby()->cache('rasteiner.kirby-iconify');
-        $cached = $cache->getOrSet($library, fn() => self::downloadPrefix($library));
+        $cached = self::getLibrary($library);
 
         // check if icon exists in cache
         if ($icon = self::resolve($cached, $this->icon)) {
@@ -79,8 +97,6 @@ class Icon {
 
     protected static function downloadPrefix(string $prefix): array {
         // download npm package from unpkg
-        // unpkg.com/@iconify-json/$prefix@latest/icons.json
-
         $url = "https://unpkg.com/@iconify-json/$prefix@latest/icons.json";
         $req = Remote::get($url, [
             'headers' => [
@@ -95,41 +111,9 @@ class Icon {
         return $req->json();        
     }
 
-    /*
-    protected static function loadIcons(string $prefix, array $icons): array {
-        if(count($icons) === 0) {
-            return [];
-        }
-
-        sort($icons);
-        $cache = kirby()->cache('rasteiner.kirby-iconify');
-        $cached = $cache->get($prefix) ?? [];
-        $query = http_build_query([
-            'icons' => join(',', $icons)
-        ]);
-
-
-        $req = Remote::get("https://api.iconify.design/{$prefix}.json?{$query}", [
-            'headers' => [
-                'Accept' => 'application/json'
-            ]
-        ]);
-
-        if ($req->code() !== 200 && option('debug')) {
-            throw new Exception('Failed to load icons');
-        }
-
-        $resp = $req->json();
-        
-        $cache->set($prefix, array_merge_recursive($cached, $resp));
-
-        return $resp;
-    }
-    */
-
     protected static function resolve(array $table, string $icon, array $props = []): ?array {
         if (array_key_exists($icon, $table['aliases'] ?? [])) {
-            return self::resolve($table, $table['aliases'][$icon], $table['aliases'][$icon]);
+            return self::resolve($table, $table['aliases']['parent'], $table['aliases'][$icon]);
         }
 
         if ($icon = $table['icons'][$icon] ?? false) {
@@ -152,13 +136,12 @@ class Icon {
         if (count(self::$using) === 0) {
             return '';
         }
-
-        $cache = kirby()->cache('rasteiner.kirby-iconify');
         
         $icons = [];
         
         foreach(self::$using as $prefix => $used) {
-            $cached = $cache->get($prefix) ?? [];
+            $cached = self::getLibrary($prefix);
+
             foreach(array_keys($used) as $icon) {
                 if ($found = self::resolve($cached, $icon)) {
                     $icons["$prefix-$icon"] = $found;
